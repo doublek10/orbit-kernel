@@ -160,7 +160,7 @@ class SchemaStore:
     def __init__(self, pool: asyncpg.Pool):
         self._pool = pool
 
-    async def list(self, company_id: str) -> list[EventSchema]:
+    async def list_schemas(self, company_id: str) -> list[EventSchema]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT * FROM event_schemas WHERE company_id = $1 ORDER BY updated_at DESC",
