@@ -338,7 +338,7 @@ class WorkflowEngine:
     # --- event schema builder (Schema Engine) ---------------------------
 
     async def _schema_list(self, ctx, payload: dict) -> dict:
-        schemas = await self._schemas.list(ctx.company_id)
+        schemas = await self._schemas.list_schemas(ctx.company_id)
         return {
             "schemas": [s.to_dict() for s in schemas],
             "example_event_names": EXAMPLE_EVENT_NAMES,
@@ -1158,7 +1158,7 @@ class WorkflowEngine:
     # --- workflow catalog (introspective, honest about what's real) ----
 
     async def _workflows_list(self, ctx, payload: dict) -> dict:
-        automations = await self._automation.list(ctx.company_id)
+        automations = await self._automation.list_definitions(ctx.company_id)
         recent_runs = await self._automation.recent_runs(ctx.company_id, limit=15)
         return {
             "automations": [
