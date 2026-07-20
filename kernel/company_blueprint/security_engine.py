@@ -86,7 +86,7 @@ async def get_security_overview(
         for r in member_rows
     ]
 
-    activity = await AuditLogger(pool).list(company_id, limit=25)
+    activity = await AuditLogger(pool).list_events(company_id, limit=25)
 
     return {
         "api_keys": {
