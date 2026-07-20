@@ -191,7 +191,7 @@ class IntelligenceManager:
         return await cache_manager.get_or_compute(f"{company_id}:dashboard", compute)
 
     async def get_reports(self, company_id: str, report_type: str | None = None, limit: int = 20) -> dict:
-        return {"reports": await self._reports.list(company_id, report_type=report_type, limit=limit)}
+        return {"reports": await self._reports.list_reports(company_id, report_type=report_type, limit=limit)}
 
     async def generate_report(self, company_id: str, report_type: str) -> dict:
         result = await self._reasoning.run(company_id)
