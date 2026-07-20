@@ -144,7 +144,7 @@ class MappingStore:
     def __init__(self, pool: asyncpg.Pool):
         self._pool = pool
 
-    async def list(self, company_id: str) -> list[DataMapping]:
+    async def list_mappings(self, company_id: str) -> list[DataMapping]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT * FROM data_mappings WHERE company_id = $1 ORDER BY updated_at DESC",
