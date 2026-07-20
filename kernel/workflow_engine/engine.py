@@ -276,7 +276,7 @@ class WorkflowEngine:
     # --- data mapping (Visual JSON Mapper / Transformation Engine) ------
 
     async def _mappings_list(self, ctx, payload: dict) -> dict:
-        mappings = await self._mappings.list(ctx.company_id)
+        mappings = await self._mappings.list_mappings(ctx.company_id)
         return {
             "mappings": [m.to_dict() for m in mappings],
             "canonical_fields": CANONICAL_FIELDS,
