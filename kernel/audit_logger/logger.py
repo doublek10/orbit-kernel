@@ -34,7 +34,7 @@ class AuditLogger:
                 metadata or {},
             )
 
-    async def list(self, company_id: str, limit: int = 25) -> list[dict]:
+    async def list_events(self, company_id: str, limit: int = 25) -> list[dict]:
         """Most recent actions first, actor resolved to an email for
         display - backs the Security page's activity feed."""
         async with self._pool.acquire() as conn:
