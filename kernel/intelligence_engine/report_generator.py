@@ -60,7 +60,7 @@ class ReportGenerator:
             "data": data,
         }
 
-    async def list(self, company_id: str, report_type: str | None = None, limit: int = 20) -> list[dict]:
+    async def list_reports(self, company_id: str, report_type: str | None = None, limit: int = 20) -> list[dict]:
         async with self._pool.acquire() as conn:
             if report_type:
                 rows = await conn.fetch(
