@@ -51,7 +51,6 @@ from kernel.intelligence_engine.manager import get_intelligence_manager
 from kernel.provider_manager import catalog as provider_catalog
 from kernel.integration_manager import catalog as integration_catalog
 from kernel.provider_manager.manager import get_provider_manager
-from kernel.workflow_engine.automation import WorkflowAutomation
 from marketplace.catalog import CATALOG
 from country_packages.registry import get_country_package
 from providers.csv_import.parser import parse_statement_csv
@@ -72,6 +71,7 @@ EXAMPLE_EVENT_NAMES = [
 
 class WorkflowEngine:
     def __init__(self, pool: asyncpg.Pool):
+        from kernel.workflow_engine.automation import WorkflowAutomation
         self._pool = pool
         self._graph = FinancialGraph(pool)
         self._events = get_event_bus(pool)

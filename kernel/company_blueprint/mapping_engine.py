@@ -14,6 +14,14 @@ This keeps the promise in the spec: "The Kernel never changes because
 customer payloads change. Only mappings change." - this file is
 intentionally payload-shape-agnostic.
 """
+from __future__ import annotations
+
+"""
+Mapping Engine (Transformation Engine)
+
+Company JSON -> Orbit Canonical Event -> Workflow Engine.
+...
+"""
 
 import json
 from dataclasses import dataclass
@@ -144,7 +152,7 @@ class MappingStore:
     def __init__(self, pool: asyncpg.Pool):
         self._pool = pool
 
-    async def list(self, company_id: str) -> list[DataMapping]:
+    async def list_mappings(self, company_id: str):
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 "SELECT * FROM data_mappings WHERE company_id = $1 ORDER BY updated_at DESC",
@@ -152,7 +160,7 @@ class MappingStore:
             )
         return [_row_to_mapping(r) for r in rows]
 
-    async def get(self, company_id: str, mapping_id: str) -> DataMapping | None:
+    async def get(self, company_id: str, mapping_id: str):
         async with self._pool.acquire() as conn:
             row = await conn.fetchrow(
                 "SELECT * FROM data_mappings WHERE id = $1 AND company_id = $2",
@@ -162,8 +170,8 @@ class MappingStore:
         return _row_to_mapping(row) if row else None
 
     async def upsert(
-        self, *, company_id: str, created_by: str, name: str, field_rules: list[dict], sample_payload: dict
-    ) -> DataMapping:
+        self, *, company_id, created_by, name, field_rules, sample_payload
+    ) :
         name = (name or "").strip()
         if not name:
             raise MappingValidationError("name is required")
@@ -188,7 +196,7 @@ class MappingStore:
             )
         return _row_to_mapping(row)
 
-    async def delete(self, company_id: str, mapping_id: str) -> bool:
+    async def delete(self, company_id, mapping_id):
         async with self._pool.acquire() as conn:
             result = await conn.execute(
                 "DELETE FROM data_mappings WHERE id = $1 AND company_id = $2",
