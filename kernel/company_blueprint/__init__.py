@@ -24,6 +24,13 @@ from kernel.company_blueprint.schema_engine import (
     validate_schema_input,
 )
 from kernel.company_blueprint.sdk_generator import SUPPORTED_LANGUAGES, render as render_sdk
+from kernel.company_blueprint.connector_generator import (
+    CONNECTOR_DATABASES,
+    CONNECTOR_LANGUAGES,
+    ConnectorValidationError,
+    render as render_connector,
+)
+from kernel.company_blueprint.connector_tester import test_connection as test_connector_connection
 from kernel.company_blueprint.security_engine import get_security_overview, verify_credential_integrity
 from kernel.company_blueprint.validator import BlueprintValidationError, validate_blueprint_input
 from kernel.company_blueprint.version_manager import Blueprint, VersionManager
@@ -54,6 +61,11 @@ __all__ = [
     "verify_signature",
     "SUPPORTED_LANGUAGES",
     "render_sdk",
+    "CONNECTOR_LANGUAGES",
+    "CONNECTOR_DATABASES",
+    "ConnectorValidationError",
+    "render_connector",
+    "test_connector_connection",
     "get_security_overview",
     "verify_credential_integrity",
     "relevant_insight_ids",

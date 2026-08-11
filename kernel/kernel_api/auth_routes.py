@@ -20,6 +20,7 @@ Concrete flow for signup, matching the platform's design exactly:
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, EmailStr
+from uuid import UUID
 
 from country_packages.registry import get_loaded_package, is_active
 from kernel.audit_logger.logger import AuditLogger
@@ -47,7 +48,7 @@ class IdentityOut(BaseModel):
 
 
 class CompanyOut(BaseModel):
-    id: str
+    id: UUID
     name: str
     country: str
     role: str

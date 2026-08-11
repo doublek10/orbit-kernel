@@ -33,7 +33,7 @@ class SupabaseSession:
 class SupabaseAuthClient:
     def __init__(self):
         settings = get_settings()
-        self._base_url = settings.supabase_url.rstrip("/")
+        self._base_url = settings.supabase_url
         self._anon_key = settings.supabase_anon_key
         self._service_role_key = settings.supabase_service_role_key
 

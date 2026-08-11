@@ -2,7 +2,7 @@
 Orbit Kernel - entrypoint.
 
 Run locally:
-    uvicorn main:app --reload --port 8000
+    uvicorn main:app --reload --port 60013
 
 Two route groups are mounted:
 - auth_routes: signup/login/refresh/logout - the only place the Kernel
@@ -10,6 +10,8 @@ Two route groups are mounted:
 - routes: identity/resolve + execute - every other authenticated request,
   re-verified fresh every single time (no caching, no gateway-side trust).
 """
+
+import logging
 
 from contextlib import asynccontextmanager
 
@@ -23,6 +25,8 @@ from kernel.kernel_api.auth_routes import router as auth_router
 from kernel.kernel_api.routes import public_router, router
 from kernel.plugin_manager.manager import plugin_manager
 from shared import db
+
+logger = logging.getLogger("orbit.kernel")
 
 _intelligence_scheduler: IntelligenceScheduler | None = None
 
@@ -69,6 +73,23 @@ async def not_implemented_handler(request: Request, exc: NotImplementedError):
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError):
     return JSONResponse(status_code=400, content={"detail": str(exc)})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # Last line of defense: no matter what breaks, the Kernel always
+    # returns JSON, never Starlette's default plain-text 500. Every
+    # caller (the Gateway, and indirectly the Frontend) unconditionally
+    # does response.json() on Kernel responses - a plain-text body here
+    # crashes that parse and surfaces as a confusing "Unexpected token"
+    # error far from the real cause. The real exception is logged
+    # server-side with a full traceback; the client only gets a generic,
+    # safe message, never internal details.
+    logger.exception("Unhandled exception on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
 
 
 app.include_router(public_router)

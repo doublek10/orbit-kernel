@@ -25,6 +25,7 @@ honest "planned", not faked.
 
 import json
 from dataclasses import dataclass
+from typing import List
 
 import asyncpg
 
@@ -81,7 +82,7 @@ class WorkflowAutomation:
             )
         return self._row_to_definition(row)
 
-    async def list(self, company_id: str) -> list[WorkflowDefinition]:
+    async def list(self, company_id: str) -> List[WorkflowDefinition]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 """
@@ -94,7 +95,7 @@ class WorkflowAutomation:
             )
         return [self._row_to_definition(row) for row in rows]
 
-    async def recent_runs(self, company_id: str, *, limit: int = 20) -> list[dict]:
+    async def recent_runs(self, company_id: str, *, limit: int = 20) -> List[dict]:
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
                 """

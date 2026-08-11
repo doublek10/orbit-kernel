@@ -24,10 +24,13 @@ from shared.config import get_settings
 from financial_graph.graph import FinancialGraph
 from kernel.company_blueprint import (
     CANONICAL_FIELDS,
+    CONNECTOR_DATABASES,
+    CONNECTOR_LANGUAGES,
     SUPPORTED_LANGUAGES,
     ApiGeneratorStore,
     BlueprintLoader,
     BlueprintValidationError,
+    ConnectorValidationError,
     MappingStore,
     MappingValidationError,
     SchemaStore,
@@ -39,8 +42,10 @@ from kernel.company_blueprint import (
     recommended_system_types,
     relevant_app_categories,
     relevant_insight_ids,
+    render_connector,
     render_sdk,
     sign_payload,
+    test_connector_connection,
     validate_event,
     validate_field_rules,
     verify_signature,
@@ -117,6 +122,8 @@ class WorkflowEngine:
             "company.rotate_secret": self._company_rotate_secret,
             "company.test_endpoint": self._company_test_endpoint,
             "sdk.generate": self._sdk_generate,
+            "connector.generate": self._connector_generate,
+            "connector.test": self._connector_test,
             "security.overview": self._security_overview,
             "graph.list": self._graph_timeline,
             "graph.create": self._graph_create,
@@ -496,6 +503,79 @@ class WorkflowEngine:
         except ValueError as exc:
             raise HTTPException(422, str(exc))
         return {"language": language, "code": code, "supported_languages": SUPPORTED_LANGUAGES}
+
+    # --- Connector Generator (DB -> Orbit, the reverse of the SDK) ------
+
+    async def _connector_generate(self, ctx, payload: dict) -> dict:
+        """
+        Renders starter code that runs on the company's own side and
+        reads from THEIR database - the reverse direction of
+        sdk.generate. Stateless like the SDK Generator: nothing here is
+        saved, so re-generating with different tables or a different
+        language is just another call.
+        """
+        self._require_admin(ctx, "generate an Orbit database connector")
+
+        language = payload.get("language", "")
+        database = payload.get("database", "")
+        filename = payload.get("filename")
+        connection = payload.get("connection") or {}
+        tables = payload.get("tables") or []
+        if not isinstance(connection, dict):
+            raise HTTPException(422, "connection must be an object")
+        if not isinstance(tables, list):
+            raise HTTPException(422, "tables must be a list")
+
+        try:
+            code, resolved_filename = render_connector(language, database, connection, tables, filename)
+        except ConnectorValidationError as exc:
+            raise HTTPException(422, str(exc))
+
+        return {
+            "language": language,
+            "database": database,
+            "filename": resolved_filename,
+            "code": code,
+            "supported_languages": CONNECTOR_LANGUAGES,
+            "supported_databases": CONNECTOR_DATABASES,
+        }
+
+    async def _connector_test(self, ctx, payload: dict) -> dict:
+        """
+        Test Connection for the Connector Generator. Attempts a real,
+        read-only connection to the company's own database with the
+        connection details and table map they just typed into the
+        wizard, and previews a few sample rows per table so they can
+        confirm Orbit is pointed at the right place. Deliberately
+        stateless - nothing this returns is written to Orbit's
+        database, so the response always carries saved: false.
+
+        If connection.connector_url is set, this calls that URL
+        instead (the file the company generated and deployed on their
+        own hosting) rather than opening a socket to their database -
+        see connector_tester._test_via_url.
+        """
+        self._require_admin(ctx, "test an Orbit database connector")
+
+        database = payload.get("database", "")
+        if database not in CONNECTOR_DATABASES:
+            raise HTTPException(422, f"Unsupported database '{database}' - choose one of {CONNECTOR_DATABASES}")
+
+        connection = payload.get("connection") or {}
+        tables = payload.get("tables") or []
+        if not isinstance(connection, dict):
+            raise HTTPException(422, "connection must be an object")
+        if not isinstance(tables, list) or not tables:
+            raise HTTPException(422, "Add at least one table for Orbit to look at")
+
+        result = await test_connector_connection(database, connection, tables)
+
+        await self._events.publish(
+            "connector.tested",
+            {"database": database, "connected": result.get("connected", False)},
+            company_id=ctx.company_id,
+        )
+        return result
 
     # --- security (overview + ownership) --------------------------------
 
@@ -1186,6 +1266,8 @@ class WorkflowEngine:
                 {"name": "company.rotate_secret", "status": "available", "description": "Rotate the webhook signing secret"},
                 {"name": "company.test_endpoint", "status": "available", "description": "Test Console - sign and verify a sample payload, optionally preview a mapping"},
                 {"name": "sdk.generate", "status": "available", "description": "Generate starter code (TypeScript, JavaScript, PHP, Python, Java) for the Company Endpoint"},
+                {"name": "connector.generate", "status": "available", "description": "Generate a database connector (JavaScript, PHP, Python, Java x Postgres/MySQL/MongoDB/SQL Server/SQLite) that reads the company's own tables"},
+                {"name": "connector.test", "status": "available", "description": "Test Connection for the database connector - live, read-only preview of what Orbit can see, never saved. Pass connection.connector_url instead of host/port to have Orbit call a deployed connector file over HTTP rather than connecting to the database directly"},
                 {"name": "security.overview", "status": "available", "description": "API keys, webhook credential status, ownership, and recent activity in one view"},
                 {"name": "graph.list", "status": "available", "description": "Full ledger timeline"},
                 {"name": "graph.create", "status": "available", "description": "Record a manual transaction"},
