@@ -31,6 +31,7 @@ from kernel.company_blueprint.connector_generator import (
     render as render_connector,
 )
 from kernel.company_blueprint.connector_tester import test_connection as test_connector_connection
+from kernel.company_blueprint.connector_preferences import ConnectorPreferences, ConnectorPreferencesStore
 from kernel.company_blueprint.security_engine import get_security_overview, verify_credential_integrity
 from kernel.company_blueprint.validator import BlueprintValidationError, validate_blueprint_input
 from kernel.company_blueprint.version_manager import Blueprint, VersionManager
@@ -66,6 +67,8 @@ __all__ = [
     "ConnectorValidationError",
     "render_connector",
     "test_connector_connection",
+    "ConnectorPreferences",
+    "ConnectorPreferencesStore",
     "get_security_overview",
     "verify_credential_integrity",
     "relevant_insight_ids",

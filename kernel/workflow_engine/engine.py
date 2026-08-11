@@ -30,6 +30,7 @@ from kernel.company_blueprint import (
     ApiGeneratorStore,
     BlueprintLoader,
     BlueprintValidationError,
+    ConnectorPreferencesStore,
     ConnectorValidationError,
     MappingStore,
     MappingValidationError,
@@ -89,6 +90,7 @@ class WorkflowEngine:
         self._mappings = MappingStore(pool)
         self._schemas = SchemaStore(pool)
         self._api_generator = ApiGeneratorStore(pool)
+        self._connector_preferences = ConnectorPreferencesStore(pool)
         self._intelligence = get_intelligence_manager(pool)
         self._handlers = {
             "dashboard.list": self._dashboard_overview,
@@ -124,6 +126,9 @@ class WorkflowEngine:
             "sdk.generate": self._sdk_generate,
             "connector.generate": self._connector_generate,
             "connector.test": self._connector_test,
+            "connector_preferences.list": self._connector_preferences_get,
+            "connector_preferences.create": self._connector_preferences_save,
+            "connector_preferences.delete": self._connector_preferences_delete,
             "security.overview": self._security_overview,
             "graph.list": self._graph_timeline,
             "graph.create": self._graph_create,
@@ -576,6 +581,58 @@ class WorkflowEngine:
             company_id=ctx.company_id,
         )
         return result
+
+    # --- Connector Generator preferences (remembered across visits) -----
+
+    async def _connector_preferences_get(self, ctx, payload: dict) -> dict:
+        """
+        What the wizard should prefill: the last language, database
+        engine, and Connector URL this company used. None of the
+        three is required to exist yet - a brand new company just
+        gets `preferences: null` and the wizard starts from scratch.
+        """
+        preferences = await self._connector_preferences.get(ctx.company_id)
+        return {"preferences": preferences.to_dict() if preferences else None}
+
+    async def _connector_preferences_save(self, ctx, payload: dict) -> dict:
+        """
+        Remembers language + database + connector_url so the next
+        visit to the wizard doesn't start cold. Deliberately the only
+        write in the Connector Generator flow - generate/test stay
+        stateless (see their docstrings); the frontend calls this
+        separately once it has a value worth keeping (after a
+        successful generate, a successful test, or the user pasting a
+        Connector URL into the "forgot to add it" prompt).
+        """
+        self._require_admin(ctx, "save Connector Generator preferences")
+
+        language = payload.get("language", "")
+        database = payload.get("database", "")
+        if language not in CONNECTOR_LANGUAGES:
+            raise HTTPException(422, f"Unsupported language '{language}' - choose one of {CONNECTOR_LANGUAGES}")
+        if database not in CONNECTOR_DATABASES:
+            raise HTTPException(422, f"Unsupported database '{database}' - choose one of {CONNECTOR_DATABASES}")
+
+        connector_url = payload.get("connector_url")
+        if connector_url is not None and not isinstance(connector_url, str):
+            raise HTTPException(422, "connector_url must be a string")
+
+        preferences = await self._connector_preferences.save(
+            ctx.company_id, language, database, connector_url
+        )
+        return {"preferences": preferences.to_dict()}
+
+    async def _connector_preferences_delete(self, ctx, payload: dict) -> dict:
+        """
+        Forgets this company's saved Connector Generator settings so
+        the Developer page falls back to the wizard from step one.
+        This is the only way back into the wizard once settings are
+        saved - the frontend's "done" view is otherwise just a summary
+        with a repeatable Test Connection button.
+        """
+        self._require_admin(ctx, "delete Connector Generator preferences")
+        deleted = await self._connector_preferences.delete(ctx.company_id)
+        return {"deleted": deleted}
 
     # --- security (overview + ownership) --------------------------------
 
@@ -1268,6 +1325,9 @@ class WorkflowEngine:
                 {"name": "sdk.generate", "status": "available", "description": "Generate starter code (TypeScript, JavaScript, PHP, Python, Java) for the Company Endpoint"},
                 {"name": "connector.generate", "status": "available", "description": "Generate a database connector (JavaScript, PHP, Python, Java x Postgres/MySQL/MongoDB/SQL Server/SQLite) that reads the company's own tables"},
                 {"name": "connector.test", "status": "available", "description": "Test Connection for the database connector - live, read-only preview of what Orbit can see, never saved. Pass connection.connector_url instead of host/port to have Orbit call a deployed connector file over HTTP rather than connecting to the database directly"},
+                {"name": "connector_preferences.list", "status": "available", "description": "Read this company's remembered Connector Generator settings (language, database engine, connector_url)"},
+                {"name": "connector_preferences.create", "status": "available", "description": "Remember this company's language, database engine, and Connector URL for next time"},
+                {"name": "connector_preferences.delete", "status": "available", "description": "Forget this company's saved Connector Generator settings so the wizard starts fresh"},
                 {"name": "security.overview", "status": "available", "description": "API keys, webhook credential status, ownership, and recent activity in one view"},
                 {"name": "graph.list", "status": "available", "description": "Full ledger timeline"},
                 {"name": "graph.create", "status": "available", "description": "Record a manual transaction"},
