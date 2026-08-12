@@ -20,3 +20,9 @@ aiomysql==0.2.0      # mysql
 motor==3.6.0         # mongodb
 aiosqlite==0.20.0    # sqlite
 pymssql==2.3.2       # sqlserver
+
+# Renders the Intelligence "Compile" report (kernel/intelligence_engine/
+# pdf_compiler.py) into an actual downloadable PDF. Pure Python, no
+# system-level dependency, so it always works instead of degrading like
+# the optional database drivers above.
+reportlab==4.2.5

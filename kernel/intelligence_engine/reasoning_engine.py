@@ -19,6 +19,7 @@ from financial_graph.graph import FinancialGraph
 from kernel.company_blueprint.loader import BlueprintLoader
 from kernel.company_blueprint.recommendations import relevant_insight_ids
 from kernel.intelligence_engine.analysis_engine import AnalysisEngine
+from kernel.intelligence_engine.connector_intelligence import ConnectorIntelligence
 from kernel.intelligence_engine.forecasting_engine import ForecastingEngine
 from kernel.intelligence_engine.health_engine import HealthEngine
 from kernel.intelligence_engine.models import ReasoningResult
@@ -31,6 +32,7 @@ class ReasoningEngine:
         self._analysis = AnalysisEngine(pool)
         self._forecasting = ForecastingEngine()
         self._blueprints = BlueprintLoader(pool)
+        self._connector = ConnectorIntelligence(pool)
 
     async def run(self, company_id: str) -> ReasoningResult:
         blueprint = await self._blueprints.load(company_id)
@@ -43,6 +45,17 @@ class ReasoningEngine:
 
         forecast = self._forecasting.project(summary)
         findings.append(self._forecasting.finding(forecast))
+
+        # Connector Intelligence: if this company saved a Connector URL
+        # (Developer -> Connector Generator, migrations/
+        # 014_connector_preferences.sql), pull in whatever live business
+        # data it actually reports - discovered per-company, not a fixed
+        # schema - on every cycle too. See connector_intelligence.py's
+        # docstring. A company with nothing saved just gets
+        # connector={"connected": False, ...} and no extra findings;
+        # this never blocks or fails the cycle.
+        connector_context, connector_findings = await self._connector.gather(company_id)
+        findings.extend(connector_findings)
 
         # Blueprint Governance: enabled_capabilities is the spec's
         # "Allowed Questions" made real - a capability outside the list
@@ -74,4 +87,5 @@ class ReasoningEngine:
             findings=findings,
             forecast=forecast,
             blueprint=blueprint.to_dict() if blueprint else None,
+            connector=connector_context,
         )

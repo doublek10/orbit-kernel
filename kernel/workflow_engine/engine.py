@@ -12,9 +12,11 @@ and repeatable, and ends by publishing an event per Development Rule #7
 (auditing itself already happens one layer up, in kernel_api/routes.py).
 """
 
+import base64
 import hashlib
 import json
 import secrets
+from datetime import datetime, timezone
 
 import asyncpg
 from fastapi import HTTPException
@@ -54,6 +56,7 @@ from kernel.company_blueprint import (
 from kernel.company_blueprint.encryption import encrypt_secret
 from kernel.event_bus.bus import get_event_bus
 from kernel.intelligence_engine.manager import get_intelligence_manager
+from kernel.intelligence_engine.pdf_compiler import render_intelligence_pdf
 from kernel.provider_manager import catalog as provider_catalog
 from kernel.integration_manager import catalog as integration_catalog
 from kernel.provider_manager.manager import get_provider_manager
@@ -106,6 +109,7 @@ class WorkflowEngine:
             "intelligence_status.list": self._intelligence_status,
             "intelligence_preferences.list": self._intelligence_preferences_get,
             "intelligence_preferences.create": self._intelligence_preferences_set,
+            "intelligence_compile.create": self._intelligence_compile,
             "blueprint.list": self._blueprint_get,
             "blueprint.create": self._blueprint_publish,
             "blueprint.versions": self._blueprint_versions,
@@ -755,6 +759,36 @@ class WorkflowEngine:
             raise HTTPException(422, str(exc))
         return {"preferences": preferences}
 
+    async def _intelligence_compile(self, ctx, payload: dict) -> dict:
+        """
+        Backs the Intelligence page's "Compile" button. The Engine
+        itself never needed this - it's running continuously regardless
+        (spec's "the Intelligence Engine never sleeps") - this is purely
+        for the human: a fresh, on-demand snapshot of everything the
+        Engine currently knows, including whatever the company's
+        Connector URL reports live, rendered into an actual downloadable
+        PDF rather than left as another JSON payload to interpret.
+        """
+        report = await self._intelligence.compile_report(ctx.company_id)
+        pdf_bytes = render_intelligence_pdf(report)
+
+        company_slug = (report.get("company", {}).get("name") or ctx.company_id or "company")
+        company_slug = "".join(c if c.isalnum() else "-" for c in company_slug).strip("-").lower() or "company"
+        stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        filename = f"orbit-intelligence-{company_slug}-{stamp}.pdf"
+
+        await self._events.publish(
+            "intelligence.compiled",
+            {"health_score": report.get("health", {}).get("score")},
+            company_id=ctx.company_id,
+        )
+
+        return {
+            "report": report,
+            "filename": filename,
+            "pdf_base64": base64.b64encode(pdf_bytes).decode("ascii"),
+        }
+
     # --- financial graph / ledger --------------------------------------
 
     async def _graph_timeline(self, ctx, payload: dict) -> dict:
@@ -1353,6 +1387,7 @@ class WorkflowEngine:
                 {"name": "intelligence_status.list", "status": "available", "description": "Intelligence Engine lifecycle status for this company"},
                 {"name": "intelligence_preferences.list", "status": "available", "description": "Read Intelligence notification preferences"},
                 {"name": "intelligence_preferences.create", "status": "available", "description": "Set Intelligence notification preferences - owner/admin only"},
+                {"name": "intelligence_compile.create", "status": "available", "description": "Compile a full Intelligence report - ledger findings plus live Connector data discovered from whatever entities your connector reports - into a downloadable PDF"},
                 {"name": "replay.list", "status": "available", "description": "Digital Financial Twin - current trajectory, unchanged, over 90 days"},
                 {"name": "replay.create", "status": "available", "description": "Digital Financial Twin scenario simulation"},
                 {"name": "marketplace.list", "status": "available", "description": "List marketplace apps, flagged with recommendations based on your Blueprint"},

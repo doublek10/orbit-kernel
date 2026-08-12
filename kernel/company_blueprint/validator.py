@@ -60,7 +60,14 @@ VALID_PRIORITIES = {
 # they're the only ones a Blueprint can govern. An empty list rejects
 # outright rather than silently meaning "everything off" - use the
 # absent/default case (all capabilities) if that's what's intended.
-VALID_CAPABILITIES = {"health", "trend", "spend", "anomaly", "forecast"}
+#
+# "connector" covers Findings derived from the company's own connected
+# systems via the Connector Generator's connector_url (employees,
+# invoices, inventory, payments read live over HTTP - see
+# kernel/intelligence_engine/connector_intelligence.py) rather than from
+# ledger_transactions. Governed the same as every other capability - a
+# restricted Blueprint can turn it off like any other Finding kind.
+VALID_CAPABILITIES = {"health", "trend", "spend", "anomaly", "forecast", "connector"}
 
 
 class BlueprintValidationError(ValueError):

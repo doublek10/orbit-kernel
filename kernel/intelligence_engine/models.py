@@ -80,6 +80,7 @@ class ReasoningResult:
     findings: list[Finding]
     forecast: dict[str, Any]
     blueprint: dict[str, Any] | None = None
+    connector: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -90,4 +91,5 @@ class ReasoningResult:
             "findings": [f.to_dict() for f in self.findings],
             "forecast": self.forecast,
             "blueprint": self.blueprint,
+            "connector": self.connector,
         }

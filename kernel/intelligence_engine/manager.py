@@ -184,6 +184,7 @@ class IntelligenceManager:
                 "health": result.health,
                 "findings": [f.to_dict() for f in result.findings],
                 "forecast": result.forecast,
+                "connector": result.connector,
                 "unread_notifications": unread,
                 "open_recommendations": open_recs,
             }
@@ -265,6 +266,107 @@ class IntelligenceManager:
 
     async def get_knowledge(self, company_id: str) -> dict:
         return await self._knowledge.read(company_id)
+
+    async def compile_report(self, company_id: str) -> dict:
+        """
+        The data behind the Intelligence page's "Compile" button: one
+        comprehensive, point-in-time snapshot of everything the Engine
+        currently knows about this company - ledger-derived health/
+        trend/forecast findings AND whatever entities the company's own
+        Connector URL actually reports (see ConnectorIntelligence's
+        docstring - discovered live via ?entity=_health, never assumed
+        to be a fixed employees/invoices/inventory/payments set) - plus
+        the Knowledge Graph's strongest relationships, open
+        recommendations, and recent notifications. This does not read
+        from cache_manager the way get_dashboard does: a Compile is a
+        deliberate, on-demand action (spec: "the AI does not need this
+        button because it's ever running" - Compile is for the human,
+        not a trigger for the Engine), so it always runs a fresh cycle's
+        worth of reasoning rather than serving a stale cached view.
+        """
+        async with self._pool.acquire() as conn:
+            company_row = await conn.fetchrow(
+                "SELECT name, country FROM companies WHERE id = $1", company_id
+            )
+
+        status = await self.get_status(company_id)
+        result = await self._reasoning.run(company_id)
+        knowledge = await self._knowledge.read(company_id)
+        recommendations = await self._recommendations_open(company_id)
+        recent_notifications = await self._recent_notifications(company_id, limit=10)
+
+        # Strongest relationships only - a full graph dump isn't a report,
+        # it's a data export; the compiled PDF wants the handful of
+        # relationships that actually explain the business.
+        top_edges = sorted(knowledge["edges"], key=lambda e: e["weight"], reverse=True)[:8]
+
+        return {
+            "company": {
+                "id": company_id,
+                "name": company_row["name"] if company_row else None,
+                "country": company_row["country"] if company_row else None,
+            },
+            "generated_at": result.generated_at.isoformat(),
+            "status": status,
+            "summary": result.summary,
+            "health": result.health,
+            "forecast": result.forecast,
+            "findings": [f.to_dict() for f in result.findings],
+            "connector": result.connector,
+            "knowledge_highlights": top_edges,
+            "recommendations": recommendations,
+            "recent_notifications": recent_notifications,
+            "blueprint": result.blueprint,
+        }
+
+    async def _recommendations_open(self, company_id: str, limit: int = 10) -> list[dict]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, rec_type, title, message, data, created_at
+                FROM intelligence_recommendations
+                WHERE company_id = $1 AND dismissed_at IS NULL
+                ORDER BY created_at DESC LIMIT $2
+                """,
+                company_id,
+                limit,
+            )
+        return [
+            {
+                "id": str(r["id"]),
+                "rec_type": r["rec_type"],
+                "title": r["title"],
+                "message": r["message"],
+                "data": r["data"],
+                "created_at": r["created_at"].isoformat(),
+            }
+            for r in rows
+        ]
+
+    async def _recent_notifications(self, company_id: str, limit: int = 10) -> list[dict]:
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                SELECT id, category, severity, title, message, created_at, read_at
+                FROM intelligence_notifications
+                WHERE company_id = $1
+                ORDER BY created_at DESC LIMIT $2
+                """,
+                company_id,
+                limit,
+            )
+        return [
+            {
+                "id": str(r["id"]),
+                "category": r["category"],
+                "severity": r["severity"],
+                "title": r["title"],
+                "message": r["message"],
+                "created_at": r["created_at"].isoformat(),
+                "read_at": r["read_at"].isoformat() if r["read_at"] else None,
+            }
+            for r in rows
+        ]
 
     async def get_history(self, company_id: str, metric_key: str, limit: int = 90) -> dict:
         points = await self._metrics.history(company_id, metric_key, limit=limit)
