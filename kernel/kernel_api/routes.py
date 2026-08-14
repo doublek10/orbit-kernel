@@ -12,12 +12,18 @@ here operates on an ALREADY-issued Supabase access token:
   Gateway forwards every request here verbatim; the Kernel resolves
   identity fresh, then dispatches to the Workflow Engine. Nothing is
   cached or pre-decided by the Gateway.
+
+Every call through /execute also records a lightweight usage event
+(kernel/admin/usage_tracker.py) so the Admin Control Panel can show each
+company's data flow / usage mix - this is pure observability and never
+affects the response returned to the Gateway.
 """
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from country_packages.registry import list_countries as list_countries_registry
+from kernel.admin.usage_tracker import UsageTracker
 from kernel.audit_logger.logger import AuditLogger
 from kernel.health.health import HealthCheck
 from kernel.kernel_api.security import require_gateway_secret
@@ -84,6 +90,10 @@ async def execute(body: ExecuteRequest):
         company_id=body.company_id,
         request_id=body.request_id,
     )
+
+    # Observability only - never allowed to affect the tenant-facing
+    # response, and swallows its own errors internally.
+    await UsageTracker(pool).record(ctx.company_id, body.workflow)
 
     result = await WorkflowEngine(pool).run(ctx, body.workflow, body.payload)
 

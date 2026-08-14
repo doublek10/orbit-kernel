@@ -51,6 +51,20 @@ class Settings(BaseSettings):
     # --- Service-to-service trust between Gateway and Kernel ---
     gateway_shared_secret: str = "Y9KqPzvJ2N8x5LwE7fHnQbRmT6sVaU4yZcX1pFd8GjNk3mCrPwLq0eHs9iBuMvAx"
 
+    # --- Service-to-service trust between the SEPARATE Admin Gateway and
+    # this same Kernel. Kept distinct from gateway_shared_secret so the
+    # admin control plane's credential can be rotated independently of
+    # the tenant-facing Gateway's, and so a leak of one never implies the
+    # other. Must exactly match the Admin Gateway's own env var.
+    admin_gateway_shared_secret: str = "changeme-admin-gateway-shared-secret"
+
+    # --- Admin Control Panel session signing. Entirely separate from
+    # Supabase - the admin_users table and this secret are the Kernel's
+    # own, self-contained authentication system for platform operators.
+    # Generate a long random value in production, e.g. `openssl rand -hex 32`.
+    admin_jwt_secret: str = "changeme-generate-a-long-random-admin-jwt-secret"
+    admin_session_ttl_seconds: int = 60 * 60 * 8  # 8 hours
+
     # --- Security Engine: symmetric key for encrypting credentials at
     # rest (Blueprint provider connections, webhook signing secrets).
     # Must be a urlsafe-base64-encoded 32-byte key - generate with

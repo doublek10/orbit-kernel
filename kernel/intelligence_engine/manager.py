@@ -192,7 +192,52 @@ class IntelligenceManager:
         return await cache_manager.get_or_compute(f"{company_id}:dashboard", compute)
 
     async def get_reports(self, company_id: str, report_type: str | None = None, limit: int = 20) -> dict:
-        return {"reports": await self._reports.list(company_id, report_type=report_type, limit=limit)}
+        """
+        Deliberately self-contained (queries intelligence_reports
+        directly) rather than delegating to ReportGenerator.list() -
+        this endpoint doesn't need anything ReportGenerator.generate()
+        builds, and keeping the read path independent means a partial
+        or mismatched deployment of report_generator.py can't take this
+        endpoint down.
+        """
+        async with self._pool.acquire() as conn:
+            if report_type:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, report_type, period_start, period_end, data, generated_at
+                    FROM intelligence_reports
+                    WHERE company_id = $1 AND report_type = $2
+                    ORDER BY generated_at DESC LIMIT $3
+                    """,
+                    company_id,
+                    report_type,
+                    limit,
+                )
+            else:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, report_type, period_start, period_end, data, generated_at
+                    FROM intelligence_reports
+                    WHERE company_id = $1
+                    ORDER BY generated_at DESC LIMIT $2
+                    """,
+                    company_id,
+                    limit,
+                )
+
+        return {
+            "reports": [
+                {
+                    "id": str(r["id"]),
+                    "report_type": r["report_type"],
+                    "period_start": r["period_start"].isoformat(),
+                    "period_end": r["period_end"].isoformat(),
+                    "generated_at": r["generated_at"].isoformat(),
+                    "data": r["data"],
+                }
+                for r in rows
+            ]
+        }
 
     async def generate_report(self, company_id: str, report_type: str) -> dict:
         result = await self._reasoning.run(company_id)
